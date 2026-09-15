@@ -76,12 +76,25 @@ def assess_risk(auth_verdict, content_analysis, geo_result, parsed_email,
     # APIs since Google Cloud is a hosting provider - doesn't get penalized
     # the same way an actual anonymous VPN/proxy relay would.
     if geo_result and geo_result.status == "ok":
-        if geo_result.proxy:
+        if geo_result.proxy and not geo_result.trusted_provider:
             factors.append(RiskFactor(
                 "Origin infrastructure",
                 f"Originating IP {geo_result.ip} is flagged as proxy/anonymization "
                 f"infrastructure ({geo_result.isp or geo_result.org})",
                 22,
+            ))
+        elif geo_result.proxy and geo_result.trusted_provider:
+            # Same rationale as the hosting exception below: major mail
+            # providers' own sending IPs are sometimes flagged "proxy" by
+            # IP-intelligence APIs even though they aren't an actual
+            # anonymizer/VPN relay. Don't penalize known providers for it.
+            factors.append(RiskFactor(
+                "Infrastructure reputation",
+                f"Originating IP {geo_result.ip} is flagged as proxy/anonymization "
+                f"infrastructure by the GeoIP provider, but belongs to a recognized "
+                f"trusted mail provider ({geo_result.isp or geo_result.org}) - "
+                f"not treated as a risk signal",
+                0,
             ))
         elif geo_result.hosting and not geo_result.trusted_provider:
             factors.append(RiskFactor(
